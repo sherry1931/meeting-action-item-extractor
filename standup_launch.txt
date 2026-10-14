@@ -1,0 +1,10 @@
+# Meeting date: 2026-10-12
+Priya: Morning everyone. Let's go through the launch checklist.
+Marcus: The API docs are almost done. I'll finish the remaining endpoints by Friday.
+Priya: Great. Sam, can you review the pricing page copy by Wednesday?
+Sam: Sure. I will send the revised copy to legal tomorrow.
+Priya: We also need to update the onboarding email sequence.
+Marcus: Um, the staging server was down last week but it's fixed now.
+Priya: Okay. Marcus, please set up monitoring alerts for the payment service by 2026-10-20.
+Sam: I'll draft the customer survey follow-up next Monday.
+Priya: Thanks all. Lena will book the launch review meeting for next week.

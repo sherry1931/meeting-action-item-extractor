@@ -1,0 +1,16 @@
+{
+ "standup_launch.txt": [
+  {"task":"Finish the remaining endpoints","owner":"Marcus","deadline":"2026-10-16"},
+  {"task":"Review the pricing page copy","owner":"Sam","deadline":"2026-10-14"},
+  {"task":"Send the revised copy to legal","owner":"Sam","deadline":"2026-10-13"},
+  {"task":"Update the onboarding email sequence","owner":null,"deadline":null},
+  {"task":"Set up monitoring alerts for the payment service","owner":"Marcus","deadline":"2026-10-20"},
+  {"task":"Draft the customer survey follow-up","owner":"Sam","deadline":"2026-10-19"},
+  {"task":"Book the launch review meeting","owner":"Lena","deadline":"2026-10-19"}],
+ "sprint_review.txt": [
+  {"task":"Check the database migration script","owner":"Jun","deadline":"2026-10-16"},
+  {"task":"Fix the flaky login test","owner":"Jun","deadline":"2026-10-16"},
+  {"task":"Write the incident report","owner":"Omar","deadline":"2026-10-30"},
+  {"task":"Schedule a retro with the design team","owner":null,"deadline":null},
+  {"task":"Send the sprint summary to stakeholders","owner":"Dana","deadline":"2026-10-14"}]
+}

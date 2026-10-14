@@ -1,0 +1,7 @@
+# Meeting date: 2026-10-13
+Dana: Let's review last sprint. Velocity was fine.
+Omar: Ticket 482 is blocked. Jun, can you check the database migration script by end of the week?
+Jun: Yes, that works for me. Also I'll fix the flaky login test by Oct 16.
+Dana: Omar, you should write the incident report by 2026-10-30.
+Omar: Understood. We need to schedule a retro with the design team.
+Dana: Alright. Dana will send the sprint summary to stakeholders tomorrow.
