@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meeting action-item extractor</title>
+<style>
+:root{--bg:#f4f5f8;--ink:#1b2030;--mut:#5f6678;--card:#fff;--line:#d8dce6;--acc:#3b4ccf;--ok:#1e7a4d;--warn:#a85d00;--bad:#b3261e;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12141c;--ink:#e7e9f2;--mut:#99a0b4;--card:#1b1f2b;--line:#2c3243;--acc:#8e9bff;--ok:#5fd09a;--warn:#f0b35a;--bad:#ff8f87}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Avenir Next",Avenir,"Segoe UI",system-ui,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:1.7rem;margin:0 0 4px;letter-spacing:-.01em}p.sub{color:var(--mut);margin:0 0 18px;max-width:68ch}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+textarea{width:100%;height:210px;resize:vertical;font:13px/1.5 ui-monospace,Menlo,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px}
+button{font:inherit;background:var(--acc);color:var(--bg);border:0;border-radius:6px;padding:7px 14px;cursor:pointer}
+button.alt{background:none;color:var(--acc);border:1px solid var(--line)}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}.bar label{margin-left:auto;color:var(--mut);font-size:.88rem}
+.wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--mut);font-weight:600;font-size:.82rem}
+.none{color:var(--bad);font-style:italic}.conf{display:flex;align-items:center;gap:6px;white-space:nowrap}
+.meter{width:46px;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.meter i{display:block;height:100%;background:var(--ok)}
+.fl{display:inline-block;font-size:.76rem;border:1px solid var(--line);border-radius:10px;padding:0 7px;margin:0 4px 3px 0;color:var(--warn)}
+.ev{color:var(--mut);font-size:.8rem;margin-top:2px}.sum{color:var(--mut);margin:0 0 8px}
+</style></head><body><main>
+<h1>Meeting action-item extractor</h1>
+<p class="sub">Paste a transcript (one <code>Name: sentence</code> per line). The page segments it by speaker and sentence, extracts tasks with owners and deadlines, then validates them: missing owners, invalid or past dates and duplicates are flagged and lower the confidence.</p>
+<section><textarea id="t" aria-label="Transcript"></textarea>
+<div class="bar"><button id="go">Extract action items</button><button class="alt" data-s="0">Launch stand-up</button><button class="alt" data-s="1">Sprint review</button><button class="alt" data-s="2">Messy example</button>
+<label>Min confidence <input type="range" id="min" min="0" max="1" step=".05" value=".3"> <span id="mv">0.30</span></label></div></section>
+<section><div class="sum" id="sum"></div><div class="wrap" id="out"></div></section>
+</main>
+<script>
+const SAMPLES=[`# Meeting date: 2026-10-12
+Priya: Morning everyone. Let's go through the launch checklist.
+Marcus: The API docs are almost done. I'll finish the remaining endpoints by Friday.
+Priya: Great. Sam, can you review the pricing page copy by Wednesday?
+Sam: Sure. I will send the revised copy to legal tomorrow.
+Priya: We also need to update the onboarding email sequence.
+Marcus: Um, the staging server was down last week but it's fixed now.
+Priya: Okay. Marcus, please set up monitoring alerts for the payment service by 2026-10-20.
+Sam: I'll draft the customer survey follow-up next Monday.
+Priya: Thanks all. Lena will book the launch review meeting for next week.`,
+`# Meeting date: 2026-10-13
+Dana: Let's review last sprint. Velocity was fine.
+Omar: Ticket 482 is blocked. Jun, can you check the database migration script by end of the week?
+Jun: Yes, that works for me. Also I'll fix the flaky login test by Oct 16.
+Dana: Omar, you should write the incident report by 2026-10-30.
+Omar: Understood. We need to schedule a retro with the design team.
+Dana: Alright. Dana will send the sprint summary to stakeholders tomorrow.`,
+`# Meeting date: 2026-10-12
+Ann: I'll file the tax report by Feb 30.
+Ann: I will send the vendor contract to legal on 2026-10-01.
+Raj: Ann, please send the vendor contract to legal by Friday.
+Raj: We should refresh the pricing deck.
+Ann: I'll book the offsite venue by 2028-03-01.`];
+const DAYS="monday tuesday wednesday thursday friday saturday sunday".split(" "),MS="jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+const MON="(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)";
+const PAT=[["iso",/\b(\d{4})-(\d{2})-(\d{2})\b/],["md",new RegExp("\\b"+MON+"\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b","i")],["dm",new RegExp("\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?"+MON+"\\b","i")],
+["rel",/\b(today|tomorrow|end of (?:the )?week|eow|end of (?:the )?month|eom|next week)\b/i],["day",new RegExp("\\b(next\\s+)?("+DAYS.join("|")+")\\b","i")]];
+const mod=(a,n)=>((a%n)+n)%n,add=(d,n)=>new Date(d.getTime()+n*864e5),wd=d=>mod(d.getUTCDay()+6,7),iso=d=>d.toISOString().slice(0,10);
+const mk=(y,m,d)=>{const x=new Date(Date.UTC(y,m-1,d));if(x.getUTCMonth()!=m-1)throw 0;return x};
+function resolve(k,g,ref){const y=ref.getUTCFullYear();
+ if(k=="iso")return mk(+g[1],+g[2],+g[3]);if(k=="md")return mk(y,MS.indexOf(g[1].slice(0,3).toLowerCase())+1,+g[2]);if(k=="dm")return mk(y,MS.indexOf(g[2].slice(0,3).toLowerCase())+1,+g[1]);
+ if(k=="rel"){const w=g[1].toLowerCase();if(w=="today")return ref;if(w=="tomorrow")return add(ref,1);if(w=="next week")return add(ref,7);
+  if(w=="eow"||(w.startsWith("end")&&w.includes("week")))return add(ref,mod(4-wd(ref),7));return new Date(Date.UTC(y,ref.getUTCMonth()+1,0))}
+ let d=add(ref,mod(DAYS.indexOf(g[2].toLowerCase())-wd(ref)-1,7)+1);if(g[1]&&d<add(ref,7-wd(ref)))d=add(d,7);return d}
+function parseDl(s,ref){for(const[k,rx]of PAT){const m=rx.exec(s);if(m){try{return[resolve(k,m,ref),m[0],false]}catch(e){return[null,m[0],true]}}}return[null,null,false]}
+const STOP=new Set("okay ok thanks thank great sure yes no so well also we they it this that there then the a i you please let and but maybe if hello hi morning good alright understood next last".split(" "));
+const ADDR=/^([A-Z][a-z]+),\s+(.*)$/,CUE=/^(?:you(?:'ll| will| should| need to| must| have to)|should|need to|must|have to|please|(?:can|could|would|will) you)\s+/i,
+COMMIT=/\b(?:I'll|I will|I can take|I'm going to|I am going to|let me)\s+/i,NW=/\b([A-Z][a-z]+)\s+(will|is going to|to)\s+/g,GEN=/\b(?:need to|needs to|have to|has to|should|must|please|action item:?|make sure(?: to)?)\s+/i;
+const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),h=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function segment(text){const T=[];for(const line of text.split("\n")){const m=line.match(/^\s*(?:\[?\d{1,2}:\d{2}(?::\d{2})?\]?\s*)?([A-Z][\w.'-]*(?: [A-Z][\w.'-]*)?):\s*(.+)$/);if(!m)continue;
+ for(const s of m[2].replace(/\b(?:um+|uh+|erm|you know|i mean)\b,?\s*/gi,"").trim().split(/(?<=[.!?])\s+(?=[A-Z"'])/))if(s.trim())T.push({sp:m[1],s:s.trim()})}return T}
+function extract(T,ref){const spk=new Set(T.map(t=>t.sp)),out=[];
+ for(const t of T){const s=t.s;let owner=null,task=null,conf=0,m,c;
+  if((m=s.match(ADDR))&&!STOP.has(m[1].toLowerCase())&&(c=m[2].match(CUE))){owner=m[1];task=m[2].slice(c[0].length);conf=.85}
+  else if(c=s.match(COMMIT)){owner=t.sp;task=s.slice(c.index+c[0].length);conf=.85}
+  else{for(const n of s.matchAll(NW)){if(STOP.has(n[1].toLowerCase())||(n[2]=="to"&&!spk.has(n[1])))continue;owner=n[1];task=s.slice(n.index+n[0].length);conf=.8;break}
+   if(!task&&(c=s.match(GEN))){task=s.slice(c.index+c[0].length);conf=.55}}
+  if(!task)continue;const[dl,span,bad]=parseDl(s,ref);
+  if(span)task=task.replace(new RegExp("\\s*\\b(?:by|on|before|until|due|for)?\\s*"+esc(span),"i"),"");
+  task=task.replace(/^[ .?!,;]+|[ .?!,;]+$/g,"");if(task.split(/\s+/).length<2)continue;
+  out.push({task:task[0].toUpperCase()+task.slice(1),owner,deadline:dl,conf:Math.min(conf+(dl?.1:0),.95),ev:t.sp+": "+s,flags:bad?["invalid_date"]:[]})}return out}
+const tk=s=>new Set((s.toLowerCase().match(/[a-z0-9]+/g)||[]).filter(w=>!["the","a","an","to","of","for","with","it","and"].includes(w)));
+const jac=(a,b)=>{const A=tk(a),B=tk(b),i=[...A].filter(x=>B.has(x)).length,u=new Set([...A,...B]).size;return u?i/u:0};
+function validate(items,ref,spk){const out=[];for(const it of items){
+ if(!it.owner){it.flags.push("missing_owner");it.conf-=.15}else if(!spk.has(it.owner))it.flags.push("owner_not_in_meeting");
+ if(!it.deadline)it.flags.push("missing_deadline");else if(it.deadline<ref){it.flags.push("deadline_in_past");it.conf-=.2}else if(it.deadline>add(ref,365))it.flags.push("deadline_over_1_year");
+ const i=out.findIndex(o=>jac(o.task,it.task)>=.7&&(o.owner==it.owner||!o.owner||!it.owner));
+ if(i>=0){const a=out[i],b=it,[best,oth]=b.conf>a.conf?[b,a]:[a,b];best.owner=best.owner||oth.owner;best.deadline=best.deadline||oth.deadline;
+  best.flags=[...new Set([...best.flags,"merged_duplicate"])].filter(f=>!(f=="missing_owner"&&best.owner));out[i]=best}else out.push(it)}
+ out.forEach(i=>i.conf=Math.max(.05,Math.min(.99,i.conf)));return out}
+let items=[],ref=null;
+function render(){const min=+$("min").value;$("mv").textContent=min.toFixed(2);const rows=items.filter(i=>i.conf>=min);
+ $("sum").textContent=ref?`Meeting date ${iso(ref)} · ${rows.length} of ${items.length} action items shown`:"";
+ $("out").innerHTML=rows.length?`<table><thead><tr><th>Task</th><th>Owner</th><th>Deadline</th><th>Status</th><th>Confidence</th><th>Checks</th></tr></thead><tbody>`+rows.map(i=>`<tr><td>${h(i.task)}<div class="ev">${h(i.ev)}</div></td><td>${i.owner?h(i.owner):'<span class="none">unassigned</span>'}</td><td>${i.deadline?iso(i.deadline):'<span class="none">none</span>'}</td><td>open</td><td><div class="conf"><span class="meter"><i style="width:${i.conf*100}%"></i></span>${i.conf.toFixed(2)}</div></td><td>${i.flags.map(f=>`<span class="fl">${f.replace(/_/g," ")}</span>`).join("")||"✓"}</td></tr>`).join("")+"</tbody></table>":"<p class='sum'>No action items found. Check that lines look like “Name: sentence”.</p>"}
+const $=id=>document.getElementById(id);
+function go(){const text=$("t").value,m=text.match(/meeting date:\s*(\d{4}-\d{2}-\d{2})/i),n=new Date();
+ ref=m?new Date(m[1]+"T00:00:00Z"):new Date(Date.UTC(n.getFullYear(),n.getMonth(),n.getDate()));const T=segment(text);items=validate(extract(T,ref),ref,new Set(T.map(t=>t.sp)));render()}
+$("t").value=SAMPLES[0];$("go").onclick=go;$("min").oninput=render;
+document.querySelectorAll("[data-s]").forEach(b=>b.onclick=()=>{$("t").value=SAMPLES[b.dataset.s];go()});go();
+</script></body></html>
